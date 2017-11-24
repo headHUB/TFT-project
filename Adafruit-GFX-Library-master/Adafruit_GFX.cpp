@@ -785,22 +785,46 @@ void Adafruit_GFX::drawChar(int16_t x, int16_t y, unsigned char c,
         // implemented this yet.
 
         startWrite();
-        for(yy=0; yy<h; yy++) {
-            for(xx=0; xx<w; xx++) {
-                if(!(bit++ & 7)) {
-                    bits = pgm_read_byte(&bitmap[bo++]);
-                }
-                if(bits & 0x80) {
-                    if(size == 1) {
-                        writePixel(x+xo+xx, y+yo+yy, color);
-                    } else {
-                        writeFillRect(x+(xo16+xx)*size, y+(yo16+yy)*size,
-                          size, size, color);
-                    }
-                }
-                bits <<= 1;
-            }
+#define FAST_TEXT // Enable faster drawing of glyphs
+#ifdef FAST_TEXT
+    uint16_t hpc = 0; // Horizontal foreground pixel count
+    for(yy=0; yy<h; yy++) {
+      for(xx=0; xx<w; xx++) {
+        if(bit == 0) {
+          bits = pgm_read_byte(&bitmap[bo++]);
+          bit  = 0x80;
         }
+        if(bits & bit) hpc++;
+        else {
+          if (hpc) {
+            if(size == 1) drawFastHLine(x+xo+xx-hpc, y+yo+yy, hpc, color);
+            else fillRect(x+(xo16+xx-hpc)*size, y+(yo16+yy)*size, size*hpc, size, color);
+            hpc=0;
+          }
+        }
+        bit >>= 1;
+      }
+      // Draw pixels for this line as we are about to increment yy
+      if (hpc) {
+        if(size == 1) drawFastHLine(x+xo+xx-hpc, y+yo+yy, hpc, color);
+        else fillRect(x+(xo16+xx-hpc)*size, y+(yo16+yy)*size, size*hpc, size, color);
+        hpc=0;
+      }
+    }
+#else
+    for(yy=0; yy<h; yy++) {
+      for(xx=0; xx<w; xx++) {
+        if(!(bit++ & 7)) {
+          bits = pgm_read_byte(&bitmap[bo++]);
+        }
+        if(bits & 0x80) {
+          if(size == 1) drawPixel(x+xo+xx, y+yo+yy, color);
+          else fillRect(x+(xo16+xx)*size, y+(yo16+yy)*size, size, size, color);
+        }
+        bits <<= 1;
+      }
+    }
+#endif
         endWrite();
 
     } // End classic vs custom font
